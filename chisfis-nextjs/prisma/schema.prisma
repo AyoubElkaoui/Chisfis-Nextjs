@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // dev: sqlite; in prod kun je "postgresql" gebruiken
+  url      = env("DATABASE_URL") // bijv. file:./dev.db
+}
+
+model City {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  slug           String           @unique
+  cleaners       Cleaner[]
+  BookingRequest BookingRequest[]
+}
+
+model Cleaner {
+  id             Int              @id @default(autoincrement())
+  name           String
+  slug           String           @unique
+  phoneE164      String?
+  bio            String?
+  photoUrl       String?
+  cityId         Int
+  city           City             @relation(fields: [cityId], references: [id])
+  rating         Float?
+  pricePerHour   Int?
+  services       Json?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  BookingRequest BookingRequest[]
+}
+
+model BookingRequest {
+  id            Int           @id @default(autoincrement())
+  cleanerId     Int?
+  cleaner       Cleaner?      @relation(fields: [cleanerId], references: [id])
+  cityId        Int
+  city          City          @relation(fields: [cityId], references: [id])
+  fullName      String
+  phoneE164     String
+  preferredDate DateTime
+  message       String?
+  status        BookingStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+}
+
+enum BookingStatus {
+  PENDING
+  CONTACTED
+  CONFIRMED
+  DECLINED
+}

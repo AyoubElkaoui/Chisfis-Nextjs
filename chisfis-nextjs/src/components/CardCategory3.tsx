@@ -1,4 +1,4 @@
-import { TCategory } from '@/data/categories'
+22import { TCategory } from '@/data/categories'
 import convertNumbThousand from '@/utils/convertNumbThousand'
 import Image from 'next/image'
 import Link from 'next/link'

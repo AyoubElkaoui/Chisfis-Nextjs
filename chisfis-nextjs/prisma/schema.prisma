@@ -1,55 +1,133 @@
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite" // dev: sqlite; in prod kun je "postgresql" gebruiken
-  url      = env("DATABASE_URL") // bijv. file:./dev.db
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int              @id @default(autoincrement())
+  email           String           @unique
+  name            String
+  phone           String?
+  country         String?          // NL, DE, BE, FR, ES
+  isActive        Boolean          @default(true)
+  role            UserRole         @default(CUSTOMER)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  bookingRequests BookingRequest[]
+  houses          House[]
+  reviews         Review[]
+  cleaner         Cleaner?         // If user is also a cleaner
+}
+
+model House {
+  id              Int              @id @default(autoincrement())
+  userId          Int
+  user            User             @relation(fields: [userId], references: [id])
+  address         String
+  cityId          Int
+  city            City             @relation(fields: [cityId], references: [id])
+  description     String?
+  specialNotes    String?          // Speciale instructies voor schoonmaker
+  keyLocation     String?          // Waar sleutel te vinden
+  createdAt       DateTime         @default(now())
+  bookingRequests BookingRequest[]
 }
 
 model City {
   id             Int              @id @default(autoincrement())
   name           String           @unique
   slug           String           @unique
+  region         String?          // Noord, Centrum, Zuid Marokko
   cleaners       Cleaner[]
-  BookingRequest BookingRequest[]
+  bookingRequests BookingRequest[]
+  houses         House[]
 }
 
 model Cleaner {
   id             Int              @id @default(autoincrement())
+  userId         Int?             @unique // If cleaner also has user account
+  user           User?            @relation(fields: [userId], references: [id])
   name           String
   slug           String           @unique
   phoneE164      String?
+  email          String?
   bio            String?
   photoUrl       String?
   cityId         Int
   city           City             @relation(fields: [cityId], references: [id])
   rating         Float?
+  reviewCount    Int              @default(0)
   pricePerHour   Int?
-  services       Json?
+  services       String?          // JSON string ["basic", "deep", "windows", "garden"]
+  languages      String?          // JSON string ["ar", "fr", "en"]
+  availability   String?          // JSON string with days/times
   isActive       Boolean          @default(true)
+  isVerified     Boolean          @default(false)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  BookingRequest BookingRequest[]
+  bookingRequests BookingRequest[]
+  reviews        Review[]
 }
 
 model BookingRequest {
   id            Int           @id @default(autoincrement())
+  userId        Int?
+  user          User?         @relation(fields: [userId], references: [id])
+  houseId       Int?
+  house         House?        @relation(fields: [houseId], references: [id])
   cleanerId     Int?
   cleaner       Cleaner?      @relation(fields: [cleanerId], references: [id])
   cityId        Int
   city          City          @relation(fields: [cityId], references: [id])
   fullName      String
   phoneE164     String
+  email         String?
   preferredDate DateTime
+  serviceType   ServiceType   @default(BASIC)
+  duration      Int?          // Geschatte uren
+  totalPrice    Int?          // In centen
   message       String?
   status        BookingStatus @default(PENDING)
   createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  cleanerId Int
+  cleaner   Cleaner  @relation(fields: [cleanerId], references: [id])
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  rating    Int      // 1-5 sterren
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+enum UserRole {
+  CUSTOMER
+  CLEANER
+  ADMIN
 }
 
 enum BookingStatus {
   PENDING
   CONTACTED
   CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
   DECLINED
+}
+
+enum ServiceType {
+  BASIC       // Basis schoonmaak
+  DEEP        // Grote schoonmaak
+  MAINTENANCE // Onderhoud
+  WINDOWS     // Ramen
+  GARDEN      // Tuin
 }

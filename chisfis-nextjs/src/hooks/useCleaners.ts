@@ -6,13 +6,19 @@ export type CleanerDTO = {
     id: number;
     slug: string;
     name: string;
-    city: string;
-    citySlug: string;
+    city: {
+        name: string;
+        slug: string;
+    };
     bio: string | null;
     pricePerHour: number | null;
     photoUrl: string;
     phoneE164: string | null;
-    services: any[];
+    services: string[];     // Array
+    languages: string[];    // Array
+    rating: number | null;
+    reviewCount: number;
+    isVerified: boolean;
 };
 
 export function useCleaners(city?: string) {
@@ -22,9 +28,18 @@ export function useCleaners(city?: string) {
     useEffect(() => {
         setLoading(true);
         const url = city ? `/api/cleaners?city=${encodeURIComponent(city)}` : "/api/cleaners";
+
         fetch(url)
             .then((r) => r.json())
-            .then(setData)
+            .then((response) => {
+                // API returns array directly
+                const cleaners = Array.isArray(response) ? response : [];
+                setData(cleaners);
+            })
+            .catch((error) => {
+                console.error('Fetch error:', error);
+                setData([]);
+            })
             .finally(() => setLoading(false));
     }, [city]);
 

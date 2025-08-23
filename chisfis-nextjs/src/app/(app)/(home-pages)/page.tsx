@@ -1,107 +1,167 @@
-import BackgroundSection from '@/components/BackgroundSection'
-import BgGlassmorphism from '@/components/BgGlassmorphism'
-import HeroSectionWithSearchForm1 from '@/components/hero-sections/HeroSectionWithSearchForm1'
-import HeroSearchForm from '@/components/HeroSearchForm/HeroSearchForm'
-import SectionBecomeAnAuthor from '@/components/SectionBecomeAnAuthor'
-import SectionClientSay from '@/components/SectionClientSay'
-import SectionGridAuthorBox from '@/components/SectionGridAuthorBox'
-import SectionGridCategoryBox from '@/components/SectionGridCategoryBox'
-import SectionGridFeaturePlaces from '@/components/SectionGridFeaturePlaces'
-import SectionHowItWork from '@/components/SectionHowItWork'
-import SectionOurFeatures from '@/components/SectionOurFeatures'
-import SectionSliderNewCategories from '@/components/SectionSliderNewCategories'
-import SectionSubscribe2 from '@/components/SectionSubscribe2'
-import SectionVideos from '@/components/SectionVideos'
-import { getAuthors } from '@/data/authors'
-import { getStayCategories } from '@/data/categories'
-import { getStayListings } from '@/data/listings'
-import heroImage from '@/images/hero-right.png'
-import ButtonPrimary from '@/shared/ButtonPrimary'
-import { Divider } from '@/shared/divider'
-import HeadingWithSub from '@/shared/Heading'
-import { Metadata } from 'next'
+import { Suspense } from 'react';
+import { Metadata } from 'next';
+import { prisma } from "@/lib/prisma";
+import HeroSectionCleaningService from '@/components/hero-sections/HeroSectionCleaningService';
+import FeaturedCleaners from '@/components/sections/FeaturedCleaners';
+import HowItWorks from '@/components/sections/HowItWorks';
+import TestimonialsSection from '@/components/sections/TestimonialsSection';
+import CitiesOverview from '@/components/sections/CitiesOverview';
+import FinalCallToAction from '@/components/sections/FinalCallToAction';
 
 export const metadata: Metadata = {
-  title: 'Home',
-  description: 'Home page of the Stay application',
+  title: 'CleanMorocco - Professionele Schoonmaakdiensten in Marokko',
+  description: 'Vind betrouwbare en gescreende schoonmakers in alle grote steden van Marokko. Perfect voor expats en vakantiehuizen. Boek direct online.',
+  keywords: 'schoonmaker marokko, cleaning service morocco, huishoudelijke hulp, marrakech casablanca rabat',
+};
+
+// Server-side data fetching
+async function getHomepageData() {
+  try {
+    const [featuredCleaners, cities, stats] = await Promise.all([
+      // Top 6 featured cleaners
+      prisma.cleaner.findMany({
+        where: {
+          isActive: true,
+          isVerified: true
+        },
+        include: { city: true },
+        orderBy: [
+          { rating: 'desc' },
+          { reviewCount: 'desc' }
+        ],
+        take: 6
+      }),
+
+      // Cities with cleaner count
+      prisma.city.findMany({
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          region: true,
+          _count: {
+            select: {
+              cleaners: { where: { isActive: true } }
+            }
+          }
+        }
+      }),
+
+      // Stats for hero section
+      prisma.$transaction([
+        prisma.cleaner.count({ where: { isActive: true } }),
+        prisma.city.count(),
+        prisma.cleaner.aggregate({
+          where: {
+            isActive: true,
+            rating: { not: null }
+          },
+          _avg: { rating: true }
+        })
+      ])
+    ]);
+
+    // Transform data
+    const cleanersData = featuredCleaners.map((c) => ({
+      id: c.id,
+      slug: c.slug,
+      name: c.name,
+      city: {
+        name: c.city.name,
+        slug: c.city.slug
+      },
+      bio: c.bio,
+      pricePerHour: c.pricePerHour,
+      photoUrl: c.photoUrl ?? "/images/cleaners/default.jpg",
+      phoneE164: c.phoneE164 ?? null,
+      services: c.services ? JSON.parse(c.services) : [],
+      languages: c.languages ? JSON.parse(c.languages) : [],
+      rating: c.rating,
+      reviewCount: c.reviewCount || 0,
+      isVerified: c.isVerified || false
+    }));
+
+    const citiesData = cities.map(city => ({
+      id: city.id,
+      name: city.name,
+      slug: city.slug,
+      region: city.region,
+      cleanerCount: city._count.cleaners
+    }));
+
+    const [cleanerCount, cityCount, avgRating] = stats;
+
+    return {
+      featuredCleaners: cleanersData,
+      cities: citiesData,
+      stats: {
+        cleanerCount,
+        cityCount,
+        avgRating: avgRating._avg.rating ? Number(avgRating._avg.rating.toFixed(1)) : 4.9
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching homepage data:', error);
+    return {
+      featuredCleaners: [],
+      cities: [],
+      stats: {
+        cleanerCount: 0,
+        cityCount: 0,
+        avgRating: 4.9
+      }
+    };
+  }
 }
 
-async function Page() {
-  const categories = await getStayCategories()
-  const stayListings = await getStayListings()
-  const authors = await getAuthors()
+export default async function HomePage() {
+  const data = await getHomepageData();
 
   return (
-    <main className="relative overflow-hidden">
-      <BgGlassmorphism />
-      <div className="relative container mb-24 flex flex-col gap-y-24 lg:mb-28 lg:gap-y-32">
-        <HeroSectionWithSearchForm1
-          heading="Hotel, car, experiences"
-          image={heroImage}
-          imageAlt="hero"
-          searchForm={<HeroSearchForm initTab="Stays" />}
-          description={
-            <>
-              <p className="max-w-xl text-base text-neutral-500 sm:text-xl dark:text-neutral-400">
-                With us, your trip is filled with amazing experiences.
-              </p>
-              <ButtonPrimary href={'/stay-categories/all'} className="sm:text-base/normal">
-                Start your search
-              </ButtonPrimary>
-            </>
-          }
-        />
-
-        <div>
-          <HeadingWithSub subheading="Explore the best places to stay in the world.">
-            Let&apos;s go on an adventure
-          </HeadingWithSub>
-          <SectionSliderNewCategories categoryCardType="card3" categories={categories.slice(0, 7)} />
-        </div>
-
-        <SectionOurFeatures className="py-14" />
-        <SectionGridFeaturePlaces stayListings={stayListings} cardType="card2" />
-        <Divider />
-        <SectionHowItWork />
-        <div className="relative py-20">
-          <BackgroundSection />
-          <HeadingWithSub isCenter subheading="Keep calm & travel on">
-            Become a host
-          </HeadingWithSub>
-          <SectionGridAuthorBox authors={authors} />
-        </div>
-        <SectionSubscribe2 />
-        <Divider />
-
-        <div>
-          <HeadingWithSub isCenter subheading={'Great places near where you live'}>
-            Explore nearby
-          </HeadingWithSub>
-          <SectionGridCategoryBox categories={categories.slice(0, 8)} />
-        </div>
-
-        <div className="relative py-16">
-          <BackgroundSection />
-          <SectionBecomeAnAuthor />
-        </div>
-
-        <div>
-          <HeadingWithSub subheading="Explore houses based on 10 types of stays">
-            Explore by types of stays.
-          </HeadingWithSub>
-          <SectionSliderNewCategories
-            itemClassName="w-[17rem] lg:w-1/3 xl:w-1/4"
-            categories={categories.slice(7, 16)}
-            categoryCardType="card5"
+      <div className="overflow-hidden">
+        {/* Hero Section */}
+        <section className="container py-16 lg:py-20">
+          <HeroSectionCleaningService
+              cities={data.cities}
+              stats={data.stats}
           />
-        </div>
-        <SectionVideos />
-        <div className="relative py-16">
-          <SectionClientSay />
-        </div>
-      </div>
-    </main>
-  )
-}
+        </section>
 
-export default Page
+        {/* Featured Cleaners */}
+        <section className="py-16 lg:py-20 bg-neutral-100/60 dark:bg-neutral-800/20">
+          <div className="container">
+            <FeaturedCleaners cleaners={data.featuredCleaners} />
+          </div>
+        </section>
+
+        {/* How It Works */}
+        <section className="py-16 lg:py-20">
+          <div className="container">
+            <HowItWorks />
+          </div>
+        </section>
+
+        {/* Testimonials */}
+        <section className="py-16 lg:py-20 bg-neutral-100/60 dark:bg-neutral-800/20">
+          <div className="container">
+            <TestimonialsSection />
+          </div>
+        </section>
+
+        {/* Cities Overview */}
+        <section className="py-16 lg:py-20">
+          <div className="container">
+            <CitiesOverview cities={data.cities} />
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="py-16 lg:py-20 bg-primary-600">
+          <div className="container">
+            <FinalCallToAction />
+          </div>
+        </section>
+      </div>
+  );
+}
